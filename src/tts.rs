@@ -9,119 +9,10 @@ use rand::Rng;
 
 use crate::Args;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
-pub struct TTSVoice {
-    #[serde(rename = "Name")]
-    pub name: String,
-    #[serde(rename = "ShortName")]
-    pub short_name: Option<String>,
-    #[serde(rename = "Gender")]
-    pub gender: Option<String>,
-    #[serde(rename = "Locale")]
-    pub locale: Option<String>,
-    #[serde(rename = "SuggestedCodec")]
-    pub suggested_codec: Option<String>,
-    #[serde(rename = "FriendlyName")]
-    pub friendly_name: Option<String>,
-    #[serde(rename = "Status")]
-    pub status: Option<String>,
-    #[serde(rename = "VoiceTag")]
-    pub voice_tag: Option<TTSVoiceTag>,
-}
-
-impl From<&Voice> for TTSVoice {
-    fn from(voice: &Voice) -> Self {
-        TTSVoice {
-            name: voice.name.clone(),
-            short_name: voice.short_name.clone(),
-            gender: voice.gender.clone(),
-            locale: voice.locale.clone(),
-            suggested_codec: voice.suggested_codec.clone(),
-            friendly_name: voice.friendly_name.clone(),
-            status: voice.status.clone(),
-            voice_tag: voice.voice_tag.as_ref().map(|tag| tag.into()),
-        }
-    }
-}
-
-impl From<&TTSVoice> for Voice {
-    fn from(voice: &TTSVoice) -> Self {
-        Voice {
-            name: voice.name.clone(),
-            short_name: voice.short_name.clone(),
-            gender: voice.gender.clone(),
-            locale: voice.locale.clone(),
-            suggested_codec: voice.suggested_codec.clone(),
-            friendly_name: voice.friendly_name.clone(),
-            status: voice.status.clone(),
-            voice_tag: voice.voice_tag.as_ref().map(|tag| tag.into()),
-        }
-    }
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
-pub struct TTSVoiceTag {
-    #[serde(rename = "ContentCategories")]
-    pub content_categories: Option<Vec<String>>,
-    #[serde(rename = "VoicePersonalities")]
-    pub voice_personalities: Option<Vec<String>>,
-}
-
-impl From<&VoiceTag> for TTSVoiceTag {
-    fn from(tag: &VoiceTag) -> Self {
-        TTSVoiceTag {
-            content_categories: tag.content_categories.clone(),
-            voice_personalities: tag.voice_personalities.clone(),
-        }
-    }
-}
-
-impl From<&TTSVoiceTag> for VoiceTag {
-    fn from(tag: &TTSVoiceTag) -> Self {
-        VoiceTag {
-            content_categories: tag.content_categories.clone(),
-            voice_personalities: tag.voice_personalities.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct TTSSpeechConfig {
-    pub voice_name: String,
-    pub audio_format: String,
-    pub pitch: i32,
-    pub rate: i32,
-    pub volume: i32,
-}
-
-impl From<SpeechConfig> for TTSSpeechConfig {
-    fn from(config: SpeechConfig) -> Self {
-        TTSSpeechConfig {
-            voice_name: config.voice_name.clone(),
-            audio_format: config.audio_format.clone(),
-            pitch: config.pitch,
-            rate: config.rate,
-            volume: config.volume,
-        }
-    }
-}
-
-impl From<TTSSpeechConfig> for SpeechConfig {
-    fn from(config: TTSSpeechConfig) -> Self {
-        SpeechConfig {
-            voice_name: config.voice_name.clone(),
-            audio_format: config.audio_format.clone(),
-            pitch: config.pitch,
-            rate: config.rate,
-            volume: config.volume,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct TTSSpeech {
-    voice_config: TTSVoice,
-    speech_config: TTSSpeechConfig,
+    voice_config: Arc<Voice>,
+    speech_config: Arc<SpeechConfig>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -167,7 +58,7 @@ impl From<TTSGender> for String {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TTSConfigs {
     tts_configs: Vec<TTSSpeech>,
 }
@@ -177,18 +68,19 @@ impl TTSConfigs {
         let voices = get_voices_list_async().await
             .unwrap()
             .into_iter()
-            .map(|voice| TTSSpeech {
-                voice_config: TTSVoice::from(&voice),
-                speech_config: SpeechConfig::from(&voice).into(),
+            .map(|voice| {
+                TTSSpeech {
+                    speech_config: Arc::new(SpeechConfig::from(&voice)),
+                    voice_config: Arc::new(voice),
+                }
             })
             .collect::<Vec<TTSSpeech>>();
-
         TTSConfigs {
             tts_configs: voices,
         }
     }
 
-    pub fn filter_gender(&self, gender: TTSGender) -> Self {
+    pub fn filter_gender(&self, gender: TTSGender) -> TTSConfigs {
         let voices = self.tts_configs
             .iter()
             .filter(|voice| voice.voice_config.gender == Some(gender.into()))
@@ -203,7 +95,7 @@ impl TTSConfigs {
         }
     }
 
-    pub fn filter_locale(&self, locale: &str) -> Self {
+    pub fn filter_locale(&self, locale: &str) -> TTSConfigs {
         let voices = self.tts_configs
             .iter()
             .filter(|voice| voice.voice_config.locale == Some(locale.into()))
@@ -236,7 +128,7 @@ pub async fn start(args: Arc<Args>) -> Result<()> {
         tokio::select! {
 
         ret_val = args.tts_message_queue.recv() => {
-            let audio = tts.synthesize(&ret_val, &voice.speech_config.clone().into()).await?;
+            let audio = tts.synthesize(&ret_val, &voice.speech_config.clone()).await?;
             println!("Request {:?}", ret_val);
             println!("Response {:?
             }", audio.audio_metadata);
