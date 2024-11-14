@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use msedge_tts::{
     tts::{ client::connect_async, SpeechConfig },
-    voice::{ get_voices_list_async, Voice, VoiceTag },
+    voice::{ get_voices_list_async, Voice },
 };
 use anyhow::Result;
 use rand::Rng;

@@ -103,16 +103,8 @@ pub async fn start(args: Arc<Args>) -> Result<()> {
                         }
                         "PRIVMSG" => {
                                 let payload = format!("[{}]: {}", irc_message.context.sender, irc_message.payload);
-                                args.ollama.send(payload).await;
-                                args.tts_message_queue.send(irc_message.payload).await;
-                            //   println!("Sending message to TTS engine.");
-                            //   println!("Sending message to TTS engine: {:?}", irc_message);
-                            // let tts_message = TTSMessages::new(
-                            //     irc_message.context.sender.clone(),
-                            //     irc_message.payload.clone(),
-                            //     PlayMode::Normal,
-                            // );
-                            // args.tts_queue.push(tts_message).await;
+                                args.ollama.send(payload.clone()).await;
+                                args.tts_message_queue.send(payload).await;
                             }
                         "PING" => {
                             write.send("PONG :tmi.twitch.tv".to_ws_text()).await?;
